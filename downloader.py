@@ -11,7 +11,7 @@ import signal
 class YouTubeDownloader:
     def __init__(self, root):
         self.root = root
-        self.root.title("Descargador de YouTube")
+        self.root.title("Miau Downloader")
         self.root.geometry("700x550")
         self.root.minsize(600, 500)
         self.root.configure(bg="#f0f0f0")
@@ -41,7 +41,7 @@ class YouTubeDownloader:
         main_frame.rowconfigure(10, weight=1)
         
         # Título
-        title_label = ttk.Label(main_frame, text="Descargador de YouTube", 
+        title_label = ttk.Label(main_frame, text="Miau Downloader", 
                                font=("Helvetica", 16, "bold"))
         title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
         
@@ -139,7 +139,7 @@ class YouTubeDownloader:
         self.style.configure('Footer.TFrame', background='#e1e1e1')
         
         # Copyright
-        copyright_label = ttk.Label(footer_frame, text="© 2023 ShiwoBytes", 
+        copyright_label = ttk.Label(footer_frame, text="© 2025 ShiwoBytes", 
                                    background='#e1e1e1', font=("Helvetica", 8))
         copyright_label.grid(row=0, column=0, sticky=tk.W)
         
