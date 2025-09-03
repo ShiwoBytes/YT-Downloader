@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
 import os
+import webbrowser
 from PIL import Image, ImageTk
 import yt_dlp
 
@@ -9,8 +10,13 @@ class YouTubeDownloader:
     def __init__(self, root):
         self.root = root
         self.root.title("Descargador de YouTube")
-        self.root.geometry("600x400")
-        self.root.resizable(False, False)
+        self.root.geometry("700x550")
+        self.root.minsize(600, 500)  # Tamaño mínimo responsive
+        self.root.configure(bg="#f0f0f0")
+        
+        # Configurar grid para responsive
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
         
         # Configurar estilo
         self.style = ttk.Style()
@@ -18,11 +24,14 @@ class YouTubeDownloader:
         
         # Crear interfaz
         self.create_widgets()
+        self.create_footer()
         
     def create_widgets(self):
-        # Marco principal
+        # Marco principal (con peso para responsive)
         main_frame = ttk.Frame(self.root, padding="20")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(10, weight=1)  # El área de log se expandirá
         
         # Título
         title_label = ttk.Label(main_frame, text="Descargador de YouTube", 
@@ -37,48 +46,54 @@ class YouTubeDownloader:
         url_entry = ttk.Entry(main_frame, textvariable=self.url_var, width=50)
         url_entry.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         
-        # Botón de examinar (para pegar desde portapapeles)
+        # Botón de pegar URL
         paste_btn = ttk.Button(main_frame, text="Pegar URL", command=self.paste_url)
         paste_btn.grid(row=2, column=1, padx=(10, 0), pady=(0, 10))
         
+        # Marco para formatos y calidades (responsive)
+        options_frame = ttk.Frame(main_frame)
+        options_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        options_frame.columnconfigure(0, weight=1)
+        options_frame.columnconfigure(1, weight=1)
+        
         # Selector de formato
-        format_label = ttk.Label(main_frame, text="Formato:")
-        format_label.grid(row=3, column=0, sticky=tk.W, pady=(0, 5))
+        format_label = ttk.Label(options_frame, text="Formato:")
+        format_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
         
         self.format_var = tk.StringVar(value="mp4")
-        format_combo = ttk.Combobox(main_frame, textvariable=self.format_var, 
-                                   values=["mp4", "webm", "mp3", "m4a"], 
-                                   state="readonly", width=15)
-        format_combo.grid(row=4, column=0, sticky=tk.W, pady=(0, 10))
+        format_combo = ttk.Combobox(options_frame, textvariable=self.format_var, 
+                                   values=["mp4", "mp3"], 
+                                   state="readonly", width=20)
+        format_combo.grid(row=1, column=0, sticky=tk.W, pady=(0, 10))
         
-        # Selector de calidad (solo para video)
-        quality_label = ttk.Label(main_frame, text="Calidad:")
-        quality_label.grid(row=3, column=1, sticky=tk.W, pady=(0, 5))
+        # Selector de calidad
+        quality_label = ttk.Label(options_frame, text="Calidad:")
+        quality_label.grid(row=0, column=1, sticky=tk.W, pady=(0, 5))
         
         self.quality_var = tk.StringVar(value="mejor")
-        quality_combo = ttk.Combobox(main_frame, textvariable=self.quality_var, 
-                                    values=["mejor", "peor", "720p", "480p", "360p"], 
-                                    state="readonly", width=15)
-        quality_combo.grid(row=4, column=1, sticky=tk.W, pady=(0, 10))
+        quality_combo = ttk.Combobox(options_frame, textvariable=self.quality_var, 
+                                    values=["mejor", "720p", "480p", "360p"], 
+                                    state="readonly", width=20)
+        quality_combo.grid(row=1, column=1, sticky=tk.W, pady=(0, 10))
         
         # Selector de carpeta destino
         folder_label = ttk.Label(main_frame, text="Carpeta destino:")
-        folder_label.grid(row=5, column=0, sticky=tk.W, pady=(0, 5))
+        folder_label.grid(row=4, column=0, sticky=tk.W, pady=(0, 5))
         
         self.folder_var = tk.StringVar(value=os.path.expanduser("~/Downloads"))
-        folder_entry = ttk.Entry(main_frame, textvariable=self.folder_var, width=50)
-        folder_entry.grid(row=6, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        folder_entry = ttk.Entry(main_frame, textvariable=self.folder_var)
+        folder_entry.grid(row=5, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         
         folder_btn = ttk.Button(main_frame, text="Examinar", command=self.select_folder)
-        folder_btn.grid(row=6, column=1, padx=(10, 0), pady=(0, 10))
+        folder_btn.grid(row=5, column=1, padx=(10, 0), pady=(0, 10))
         
         # Barra de progreso
         self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
-        self.progress.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(20, 10))
+        self.progress.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(20, 10))
         
         # Botones de acción
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=8, column=0, columnspan=2, pady=(10, 0))
+        button_frame.grid(row=7, column=0, columnspan=2, pady=(10, 0))
         
         self.download_btn = ttk.Button(button_frame, text="Descargar", command=self.start_download)
         self.download_btn.pack(side=tk.LEFT, padx=(0, 10))
@@ -88,30 +103,67 @@ class YouTubeDownloader:
         
         # Área de log
         log_label = ttk.Label(main_frame, text="Estado:")
-        log_label.grid(row=9, column=0, sticky=tk.W, pady=(20, 5))
+        log_label.grid(row=8, column=0, sticky=tk.W, pady=(20, 5))
         
-        self.log_text = tk.Text(main_frame, height=8, width=70, state=tk.DISABLED)
-        self.log_text.grid(row=10, column=0, columnspan=2, sticky=(tk.W, tk.E))
+        # Marco para el área de texto con scrollbar
+        log_frame = ttk.Frame(main_frame)
+        log_frame.grid(row=9, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S))
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
         
-        # Scrollbar para el área de log
-        scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL, command=self.log_text.yview)
-        scrollbar.grid(row=10, column=2, sticky=(tk.N, tk.S))
+        self.log_text = tk.Text(log_frame, height=8, state=tk.DISABLED)
+        self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
+        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         self.log_text.configure(yscrollcommand=scrollbar.set)
         
-        # Configurar expansión de columnas
+        # Configurar expansión de columnas para responsive
         main_frame.columnconfigure(0, weight=1)
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
         
         # Variable para controlar la descarga
         self.downloading = False
+        
+    def create_footer(self):
+        # Footer con redes sociales
+        footer_frame = ttk.Frame(self.root, style='Footer.TFrame')
+        footer_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), padx=10, pady=5)
+        footer_frame.columnconfigure(0, weight=1)
+        footer_frame.columnconfigure(1, weight=1)
+        
+        # Configurar estilo para el footer
+        self.style.configure('Footer.TFrame', background='#e1e1e1')
+        
+        # Copyright
+        copyright_label = ttk.Label(footer_frame, text="© 2025 ShiwoBytes", 
+                                   background='#e1e1e1', font=("Helvetica", 8))
+        copyright_label.grid(row=0, column=0, sticky=tk.W)
+        
+        # Marco para redes sociales
+        social_frame = ttk.Frame(footer_frame, style='Footer.TFrame')
+        social_frame.grid(row=0, column=1, sticky=tk.E)
+        
+        # GitHub
+        github_btn = ttk.Button(social_frame, text="GitHub", 
+                               command=lambda: webbrowser.open("https://github.com/ShiwoBytes"),
+                               style='Social.TButton')
+        github_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Instagram
+        instagram_btn = ttk.Button(social_frame, text="Instagram", 
+                                  command=lambda: webbrowser.open("https://www.instagram.com/pamphilx/"),
+                                  style='Social.TButton')
+        instagram_btn.pack(side=tk.LEFT)
+        
+        # Configurar estilo para botones sociales
+        self.style.configure('Social.TButton', font=("Helvetica", 8), padding=(5, 2))
         
     def paste_url(self):
         try:
             # Pegar desde el portapapeles
             clipboard = self.root.clipboard_get()
             self.url_var.set(clipboard)
-            self.log(f"URL pegada desde portapapeles: {clipboard}")
+            self.log(f"URL pegada desde portapapeles")
         except:
             self.log("No se pudo pegar desde el portapapeles")
     
@@ -155,22 +207,25 @@ class YouTubeDownloader:
             }
             
             # Configurar formato según selección
-            if format_type in ['mp3', 'm4a']:
+            if format_type == 'mp3':
                 ydl_opts['format'] = 'bestaudio/best'
                 ydl_opts['postprocessors'] = [{
                     'key': 'FFmpegExtractAudio',
-                    'preferredcodec': format_type,
+                    'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }]
             else:
                 if quality == 'mejor':
                     ydl_opts['format'] = 'best'
-                elif quality == 'peor':
-                    ydl_opts['format'] = 'worst'
-                else:
-                    ydl_opts['format'] = f'best[height<={quality[:-1]}]'
+                elif quality == '720p':
+                    ydl_opts['format'] = 'best[height<=720]'
+                elif quality == '480p':
+                    ydl_opts['format'] = 'best[height<=480]'
+                elif quality == '360p':
+                    ydl_opts['format'] = 'best[height<=360]'
             
-            self.log(f"Iniciando descarga: {url}")
+            self.log(f"Iniciando descarga...")
+            self.log(f"URL: {url}")
             self.log(f"Formato: {format_type}, Calidad: {quality}")
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -178,11 +233,11 @@ class YouTubeDownloader:
             
             if self.downloading:  # Solo si no fue cancelada
                 self.log("Descarga completada exitosamente")
-                messagebox.showinfo("Éxito", "Descarga completada exitosamente")
+                self.root.after(0, lambda: messagebox.showinfo("Éxito", "Descarga completada exitosamente"))
             
         except Exception as e:
             self.log(f"Error durante la descarga: {str(e)}")
-            messagebox.showerror("Error", f"Ocurrió un error: {str(e)}")
+            self.root.after(0, lambda: messagebox.showerror("Error", f"Ocurrió un error: {str(e)}"))
         
         finally:
             # Restaurar interfaz
