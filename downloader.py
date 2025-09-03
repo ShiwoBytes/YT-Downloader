@@ -3,15 +3,17 @@ from tkinter import ttk, messagebox, filedialog
 import threading
 import os
 import webbrowser
+import time
 from PIL import Image, ImageTk
 import yt_dlp
+import signal
 
 class YouTubeDownloader:
     def __init__(self, root):
         self.root = root
         self.root.title("Descargador de YouTube")
         self.root.geometry("700x550")
-        self.root.minsize(600, 500)  # Tamaño mínimo responsive
+        self.root.minsize(600, 500)
         self.root.configure(bg="#f0f0f0")
         
         # Configurar grid para responsive
@@ -22,16 +24,21 @@ class YouTubeDownloader:
         self.style = ttk.Style()
         self.style.theme_use('clam')
         
+        # Variables para control de descarga
+        self.downloading = False
+        self.ydl_process = None
+        self.download_thread = None
+        
         # Crear interfaz
         self.create_widgets()
         self.create_footer()
         
     def create_widgets(self):
-        # Marco principal (con peso para responsive)
+        # Marco principal
         main_frame = ttk.Frame(self.root, padding="20")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(10, weight=1)  # El área de log se expandirá
+        main_frame.rowconfigure(10, weight=1)
         
         # Título
         title_label = ttk.Label(main_frame, text="Descargador de YouTube", 
@@ -50,7 +57,7 @@ class YouTubeDownloader:
         paste_btn = ttk.Button(main_frame, text="Pegar URL", command=self.paste_url)
         paste_btn.grid(row=2, column=1, padx=(10, 0), pady=(0, 10))
         
-        # Marco para formatos y calidades (responsive)
+        # Marco para formatos y calidades
         options_frame = ttk.Frame(main_frame)
         options_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         options_frame.columnconfigure(0, weight=1)
@@ -118,11 +125,8 @@ class YouTubeDownloader:
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         self.log_text.configure(yscrollcommand=scrollbar.set)
         
-        # Configurar expansión de columnas para responsive
+        # Configurar expansión de columnas
         main_frame.columnconfigure(0, weight=1)
-        
-        # Variable para controlar la descarga
-        self.downloading = False
         
     def create_footer(self):
         # Footer con redes sociales
@@ -135,7 +139,7 @@ class YouTubeDownloader:
         self.style.configure('Footer.TFrame', background='#e1e1e1')
         
         # Copyright
-        copyright_label = ttk.Label(footer_frame, text="© 2025 ShiwoBytes", 
+        copyright_label = ttk.Label(footer_frame, text="© 2023 ShiwoBytes", 
                                    background='#e1e1e1', font=("Helvetica", 8))
         copyright_label.grid(row=0, column=0, sticky=tk.W)
         
@@ -160,10 +164,9 @@ class YouTubeDownloader:
         
     def paste_url(self):
         try:
-            # Pegar desde el portapapeles
             clipboard = self.root.clipboard_get()
             self.url_var.set(clipboard)
-            self.log(f"URL pegada desde portapapeles")
+            self.log("URL pegada desde portapapeles")
         except:
             self.log("No se pudo pegar desde el portapapeles")
     
@@ -191,19 +194,32 @@ class YouTubeDownloader:
         self.progress.start(10)
         
         # Iniciar descarga en un hilo separado
-        thread = threading.Thread(target=self.download_video, args=(url,))
-        thread.daemon = True
-        thread.start()
+        self.download_thread = threading.Thread(target=self.download_video, args=(url,))
+        self.download_thread.daemon = True
+        self.download_thread.start()
+        
+        # Iniciar monitor para verificar cancelación
+        self.monitor_download()
+    
+    def monitor_download(self):
+        """Monitoriza el estado de la descarga y actualiza la interfaz"""
+        if self.downloading and self.download_thread.is_alive():
+            # Revisar cada 100ms si la descarga sigue activa
+            self.root.after(100, self.monitor_download)
+        elif not self.downloading:
+            # La descarga fue cancelada
+            self.download_finished()
     
     def download_video(self, url):
         try:
             format_type = self.format_var.get()
             quality = self.quality_var.get()
             
-            # Configurar opciones de yt-dlp
+            # Configurar opciones de yt-dlp con interruptor de cancelación
             ydl_opts = {
                 'outtmpl': os.path.join(self.folder_var.get(), '%(title)s.%(ext)s'),
                 'progress_hooks': [self.progress_hook],
+                'noprogress': False,
             }
             
             # Configurar formato según selección
@@ -224,11 +240,23 @@ class YouTubeDownloader:
                 elif quality == '360p':
                     ydl_opts['format'] = 'best[height<=360]'
             
-            self.log(f"Iniciando descarga...")
+            self.log("Iniciando descarga...")
             self.log(f"URL: {url}")
             self.log(f"Formato: {format_type}, Calidad: {quality}")
             
+            # Crear instancia de yt-dlp con manejo de cancelación
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Guardar referencia para posible cancelación
+                self.ydl_process = ydl
+                
+                # Verificar periódicamente si se solicitó cancelación
+                def should_continue():
+                    return self.downloading
+                
+                # Sobrescribir el método de verificación de continuación
+                ydl._should_continue = should_continue
+                
+                # Realizar la descarga
                 ydl.download([url])
             
             if self.downloading:  # Solo si no fue cancelada
@@ -236,16 +264,22 @@ class YouTubeDownloader:
                 self.root.after(0, lambda: messagebox.showinfo("Éxito", "Descarga completada exitosamente"))
             
         except Exception as e:
-            self.log(f"Error durante la descarga: {str(e)}")
-            self.root.after(0, lambda: messagebox.showerror("Error", f"Ocurrió un error: {str(e)}"))
+            if self.downloading:  # Solo mostrar error si no fue cancelación intencional
+                self.log(f"Error durante la descarga: {str(e)}")
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Ocurrió un error: {str(e)}"))
         
         finally:
+            # Limpiar referencia
+            self.ydl_process = None
             # Restaurar interfaz
             self.root.after(0, self.download_finished)
     
     def progress_hook(self, d):
+        if not self.downloading:
+            # Lanzar excepción para detener la descarga si fue cancelada
+            raise yt_dlp.DownloadError("Descarga cancelada por el usuario")
+            
         if d['status'] == 'downloading':
-            # Actualizar progreso si está disponible
             if '_percent_str' in d:
                 percent = d['_percent_str']
                 speed = d.get('_speed_str', 'N/A')
@@ -255,14 +289,31 @@ class YouTubeDownloader:
             self.log("Procesamiento finalizado, convirtiendo si es necesario...")
     
     def cancel_download(self):
-        self.downloading = False
-        self.log("Descarga cancelada por el usuario")
-        self.download_finished()
+        """Cancelar la descarga actual"""
+        if self.downloading:
+            self.downloading = False
+            self.log("Cancelando descarga...")
+            
+            # Intentar detener el proceso de yt-dlp
+            if self.ydl_process:
+                try:
+                    # Forzar la interrupción del proceso
+                    self.ydl_process._download_retcode = -1
+                    self.ydl_process._screen_file = None
+                except:
+                    pass
+            
+            # Actualizar interfaz inmediatamente
+            self.download_finished()
+            self.log("Descarga cancelada exitosamente")
     
     def download_finished(self):
+        """Restaurar la interfaz después de la descarga"""
         self.progress.stop()
         self.download_btn.config(state=tk.NORMAL)
         self.cancel_btn.config(state=tk.DISABLED)
+        self.downloading = False
+        self.ydl_process = None
     
     def log(self, message):
         def update_log():
